@@ -1,7 +1,7 @@
 """Add three admin roles and audit logging tables
 
 Revision ID: 5a464df12345
-Revises: 1af9b942657b
+Revises: 3781e22d8b01
 Create Date: 2025-11-12 02:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine.reflection import Inspector
 
 revision = "5a464df12345"
-down_revision = "1af9b942657b"
+down_revision = "3781e22d8b01"
 branch_labels = None
 depends_on = None
 
