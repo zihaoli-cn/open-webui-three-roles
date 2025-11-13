@@ -105,44 +105,85 @@ else:
 
 
 async def periodic_usage_pool_cleanup():
-    if not aquire_func():
-        log.debug("Usage pool cleanup lock already exists. Not running it.")
-        return
-    log.debug("Running periodic_usage_pool_cleanup")
-    try:
-        while True:
-            if not renew_func():
-                log.error(f"Unable to renew cleanup lock. Exiting usage pool cleanup.")
-                raise Exception("Unable to renew usage pool cleanup lock.")
+    """
+    Periodic cleanup task for usage pool with improved error handling and timeout.
+    """
+    max_attempts = 3
+    attempt = 0
 
-            now = int(time.time())
-            send_usage = False
-            for model_id, connections in list(USAGE_POOL.items()):
-                # Creating a list of sids to remove if they have timed out
-                expired_sids = [
-                    sid
-                    for sid, details in connections.items()
-                    if now - details["updated_at"] > TIMEOUT_DURATION
-                ]
+    while attempt < max_attempts:
+        try:
+            if not aquire_func():
+                log.debug("Usage pool cleanup lock already exists. Not running it.")
+                return
 
-                for sid in expired_sids:
-                    del connections[sid]
+            log.debug("Running periodic_usage_pool_cleanup")
 
-                if not connections:
-                    log.debug(f"Cleaning up model {model_id} from usage pool")
-                    del USAGE_POOL[model_id]
-                else:
-                    USAGE_POOL[model_id] = connections
+            # Maximum runtime to prevent infinite loops
+            max_runtime = 300  # 5 minutes
+            start_time = time.time()
 
-                send_usage = True
+            while True:
+                # Check if we've exceeded maximum runtime
+                if time.time() - start_time > max_runtime:
+                    log.warning("Periodic usage pool cleanup reached maximum runtime, exiting")
+                    break
 
-            if send_usage:
-                # Emit updated usage information after cleaning
-                await sio.emit("usage", {"models": get_models_in_use()})
+                if not renew_func():
+                    log.error("Unable to renew cleanup lock. Exiting usage pool cleanup.")
+                    break
 
-            await asyncio.sleep(TIMEOUT_DURATION)
-    finally:
-        release_func()
+                now = int(time.time())
+                send_usage = False
+
+                # Use list() to avoid modification during iteration
+                for model_id, connections in list(USAGE_POOL.items()):
+                    # Creating a list of sids to remove if they have timed out
+                    expired_sids = [
+                        sid
+                        for sid, details in connections.items()
+                        if now - details["updated_at"] > TIMEOUT_DURATION
+                    ]
+
+                    for sid in expired_sids:
+                        if sid in connections:
+                            del connections[sid]
+
+                    if not connections:
+                        log.debug(f"Cleaning up model {model_id} from usage pool")
+                        if model_id in USAGE_POOL:
+                            del USAGE_POOL[model_id]
+                    else:
+                        USAGE_POOL[model_id] = connections
+
+                    send_usage = True
+
+                if send_usage:
+                    # Emit updated usage information after cleaning
+                    try:
+                        await sio.emit("usage", {"models": get_models_in_use()})
+                    except Exception as e:
+                        log.error(f"Failed to emit usage update: {e}")
+
+                await asyncio.sleep(TIMEOUT_DURATION)
+
+            # If we break out of the inner loop, exit the function
+            break
+
+        except Exception as e:
+            attempt += 1
+            log.error(f"Error in periodic_usage_pool_cleanup (attempt {attempt}/{max_attempts}): {e}")
+
+            if attempt < max_attempts:
+                log.info("Retrying after error...")
+                await asyncio.sleep(5)  # Wait before retry
+            else:
+                log.error("Max retry attempts reached, giving up on periodic_usage_pool_cleanup")
+        finally:
+            try:
+                release_func()
+            except Exception as e:
+                log.error(f"Failed to release lock: {e}")
 
 
 app = socketio.ASGIApp(

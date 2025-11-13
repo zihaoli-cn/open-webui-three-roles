@@ -391,7 +391,7 @@ if WEBUI_AUTH and WEBUI_SECRET_KEY == "":
     raise ValueError(ERROR_MESSAGES.ENV_VAR_NOT_FOUND)
 
 ENABLE_WEBSOCKET_SUPPORT = (
-    os.environ.get("ENABLE_WEBSOCKET_SUPPORT", "True").lower() == "true"
+    os.environ.get("ENABLE_WEBSOCKET_SUPPORT", "false").lower() == "true"
 )
 
 WEBSOCKET_MANAGER = os.environ.get("WEBSOCKET_MANAGER", "")
@@ -449,6 +449,12 @@ OFFLINE_MODE = os.environ.get("OFFLINE_MODE", "false").lower() == "true"
 
 if OFFLINE_MODE:
     os.environ["HF_HUB_OFFLINE"] = "1"
+
+####################################
+# MODEL_DOWNLOAD_PRIORITY
+####################################
+
+MODEL_DOWNLOAD_PRIORITY = os.environ.get("MODEL_DOWNLOAD_PRIORITY", "huggingface").lower()
 
 ####################################
 # AUDIT LOGGING

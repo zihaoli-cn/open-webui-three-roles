@@ -433,8 +433,29 @@ async def lifespan(app: FastAPI):
     if LICENSE_KEY:
         get_license_data(app, LICENSE_KEY)
 
-    asyncio.create_task(periodic_usage_pool_cleanup())
+    # Start periodic cleanup task with error handling
+    try:
+        if ENABLE_WEBSOCKET_SUPPORT:
+            cleanup_task = asyncio.create_task(periodic_usage_pool_cleanup())
+            app.state.cleanup_task = cleanup_task
+            log.debug("Periodic usage pool cleanup task started")
+        else:
+            log.debug("WebSocket support disabled, skipping periodic usage pool cleanup")
+    except Exception as e:
+        log.error(f"Failed to start periodic usage pool cleanup: {e}")
+        # Don't let cleanup task failure prevent app startup
+
     yield
+
+    # Cleanup on shutdown
+    if hasattr(app.state, 'cleanup_task'):
+        try:
+            app.state.cleanup_task.cancel()
+            await app.state.cleanup_task
+        except asyncio.CancelledError:
+            log.debug("Periodic usage pool cleanup task cancelled")
+        except Exception as e:
+            log.error(f"Error during cleanup task shutdown: {e}")
 
 
 app = FastAPI(
