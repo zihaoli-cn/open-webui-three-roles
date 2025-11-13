@@ -123,6 +123,10 @@ async def periodic_usage_pool_cleanup():
             max_runtime = 300  # 5 minutes
             start_time = time.time()
 
+            # Maximum iterations to prevent infinite loops
+            max_iterations = 100
+            iteration = 0
+
             while True:
                 # Check if we've exceeded maximum runtime
                 if time.time() - start_time > max_runtime:
@@ -131,6 +135,12 @@ async def periodic_usage_pool_cleanup():
 
                 if not renew_func():
                     log.error("Unable to renew cleanup lock. Exiting usage pool cleanup.")
+                    break
+
+                # Check if we've exceeded maximum iterations
+                iteration += 1
+                if iteration >= max_iterations:
+                    log.warning("Periodic usage pool cleanup reached maximum iterations, exiting")
                     break
 
                 now = int(time.time())
