@@ -473,7 +473,7 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 
     try:
         role = (
-            "admin" if user_count == 0 else request.app.state.config.DEFAULT_USER_ROLE
+            "system_admin" if user_count == 0 else request.app.state.config.DEFAULT_USER_ROLE
         )
 
         if user_count == 0:
